@@ -1,3 +1,2 @@
-
-info.txt version1
 version 3
+
