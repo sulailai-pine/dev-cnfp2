@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  IAM Security Fix: Disruption of Log Groups/Streams
+  
+  This CloudFormation template creates a secure IAM policy that prevents
+  disruption of CloudWatch Logs resources by explicitly denying deletion
+  operations while allowing necessary logging functionality.
+
+Parameters:
+  PolicyName:
+    Type: String
+    Default: SecureCloudWatchLogsPolicy
+    Description: Name for the IAM policy
+    
+  CreateLambdaRole:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Whether to create an example Lambda execution role
+    
+  CreateECSRole:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Whether to create an example ECS task execution role
+
+Conditions:
+  CreateLambdaRoleCondition: !Equals [!Ref CreateLambdaRole, 'true']
+  CreateECSRoleCondition: !Equals [!Ref CreateECSRole, 'true']
+
+Resources:
+  # Secure CloudWatch Logs IAM Policy
+  SecureCloudWatchLogsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Ref PolicyName
+      Description: Secure CloudWatch Logs policy preventing disruption of log groups/streams
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: SecureCloudWatchLogsAccess
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogGroups
+              - logs:DescribeLogStreams
+              - logs:GetLogEvents
+              - logs:FilterLogEvents
+            Resource: '*'
+          - Sid: DenyDisruptiveLogOperations
+            Effect: Deny
+            Action:
+              - logs:DeleteLogGroup
+              - logs:DeleteLogStream
+              - logs:DeleteRetentionPolicy
+              - logs:DeleteDestination
+              - logs:DeleteMetricFilter
+              - logs:DeleteSubscriptionFilter
+              - logs:DeleteResourcePolicy
+            Resource: '*'
+
+  # Example Lambda Execution Role with Secure Logs Policy
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: CreateLambdaRoleCondition
+    Properties:
+      RoleName: lambda-execution-secure-logs
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref SecureCloudWatchLogsPolicy
+      Tags:
+        - Key: Purpose
+          Value: Lambda execution with secure logging
+        - Key: SecurityFinding
+          Value: DisruptionOfLogGroupsStreams
+
+  # Example ECS Task Execution Role with Secure Logs Policy
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: CreateECSRoleCondition
+    Properties:
+      RoleName: ecs-task-execution-secure-logs
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref SecureCloudWatchLogsPolicy
+      Tags:
+        - Key: Purpose
+          Value: ECS task execution with secure logging
+        - Key: SecurityFinding
+          Value: DisruptionOfLogGroupsStreams
+
+Outputs:
+  SecureLogsPolicyArn:
+    Description: ARN of the secure CloudWatch Logs IAM policy
+    Value: !Ref SecureCloudWatchLogsPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-SecureLogsPolicyArn'
+      
+  LambdaExecutionRoleArn:
+    Description: ARN of the Lambda execution role with secure logs policy
+    Condition: CreateLambdaRoleCondition
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaRoleArn'
+      
+  ECSTaskExecutionRoleArn:
+    Description: ARN of the ECS task execution role with secure logs policy
+    Condition: CreateECSRoleCondition
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ECSTaskRoleArn'
+
+  DeploymentInstructions:
+    Description: How to deploy this template
+    Value: |
+      Deploy using AWS CLI:
+      aws cloudformation create-stack \
+        --stack-name secure-cloudwatch-logs \
+        --template-body file://cloudformation-template.yaml \
+        --capabilities CAPABILITY_NAMED_IAM
+        
+      Deploy using AWS Console:
+      1. Go to CloudFormation console
+      2. Click "Create stack"
+      3. Upload this template
+      4. Specify stack name and parameters
+      5. Acknowledge IAM resource creation
+      6. Create the stack
